@@ -1,11 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
-from inspect import signature
 import threading
 import functools
 import asyncio
 import json
 
 from router import Router
+from igloo import Parser
 
 
 class Penguin(Router):
@@ -15,26 +15,28 @@ class Penguin(Router):
         self.logger = logger
         self.workers = workers
         self.executor = ThreadPoolExecutor(self.workers)
-        self.router = Router()
-
-    async def get_params(self, route_function, request_line):
-        func_signature = signature(route_function)
-        params = {}
-
-        for param_name, param in func_signature.parameters.items():
-            if param_name == "self":
-                continue
-
-        return params
+        self.router = Router
 
     async def execute(self, request_line):
-        key = (request_line.method, request_line.path)
+        method, path = request_line[0], request_line[1]
 
-        defined_routes = self.router.defined_routes
+        defined_routes = self.router.ROUTE_MAP
 
-        if key in defined_routes:
-            route_function = defined_routes[key]
-            params = await self.get_params(route_function, request_line)
+        matched_route = None
+
+        for route_key, route_function in defined_routes.items():
+            (
+                defined_method,
+                defined_path,
+            ) = route_key
+
+            if method == defined_method and Parser.path_matches(defined_path, path):
+                matched_route = route_key
+                break
+
+        if matched_route:
+            route_function = defined_routes[matched_route]
+            params = Parser.get_params(route_function, request_line, matched_route)
             loop = asyncio.get_event_loop()
             await loop.run_in_executor(
                 self.executor, functools.partial(route_function, **params)
@@ -55,9 +57,9 @@ class Penguin(Router):
             if self.logger:
                 print(request_line)
 
-            self.is_declared_path(request_line)
+            request = Parser.request_parser(request_line)
 
-            await self.execute(request_line)
+            await self.execute(request)
 
             # TODO Ajustar o response dentro do Router
             response_json = {"message": "Hello, Penguin!"}
@@ -86,4 +88,16 @@ class Penguin(Router):
 
 if __name__ == "__main__":
     server = Penguin()
+
+    @server.route("GET", "/teste/{name}/{age}")
+    def teste_function(name, age):
+        print(name)
+        print(age)
+        current_thread = threading.current_thread().name
+        print(f"Thread: {current_thread}")
+        import time
+
+        time.sleep(1)
+        print(f"Fim: {current_thread}")
+
     asyncio.run(server.run())
