@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-import threading
 import functools
 import asyncio
 import json
