@@ -4,7 +4,7 @@ import functools
 import asyncio
 import json
 
-from router import Router
+from router import Router, HttpStatus
 from igloo import Parser
 
 
@@ -37,12 +37,9 @@ class Penguin(Router):
         if matched_route:
             route_function = defined_routes[matched_route]
             params = Parser.get_params(route_function, request_line, matched_route)
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                self.executor, functools.partial(route_function, **params)
-            )
+            return await asyncio.to_thread(functools.partial(route_function, **params))
         else:
-            pass
+            return self.router.http_error(HttpStatus.FORBIDDEN)
 
     async def handler(self, reader, writer):
         while True:
@@ -59,18 +56,16 @@ class Penguin(Router):
 
             request = Parser.request_parser(request_line)
 
-            await self.execute(request)
+            response_data, status_code = await self.execute(request)
 
-            # TODO Ajustar o response dentro do Router
-            response_json = {"message": "Hello, Penguin!"}
-            response_data = json.dumps(response_json).encode("utf-8")
+            response_json = json.dumps(response_data).encode("utf-8")
 
-            response_headers = f"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {len(response_data)}\r\n\r\n"
+            response_headers = f"HTTP/1.1 {status_code}\r\nContent-Type: application/json\r\nContent-Length: {len(response_json)}\r\n\r\n"
 
             writer.write(response_headers.encode("utf-8"))
             await writer.drain()
 
-            writer.write(response_data)
+            writer.write(response_json)
             await writer.drain()
 
         writer.close()
@@ -85,19 +80,7 @@ class Penguin(Router):
         async with server:
             await server.serve_forever()
 
-
-if __name__ == "__main__":
-    server = Penguin()
-
-    @server.route("GET", "/teste/{name}/{age}")
-    def teste_function(name, age):
-        print(name)
-        print(age)
-        current_thread = threading.current_thread().name
-        print(f"Thread: {current_thread}")
-        import time
-
-        time.sleep(1)
-        print(f"Fim: {current_thread}")
-
-    asyncio.run(server.run())
+    def start(self):
+        loop = asyncio.get_event_loop()
+        loop.create_task(self.run())
+        loop.run_forever()
