@@ -1,6 +1,6 @@
 [project]
 name = "py-penguin"
-version = "0.0.4"
+version = "0.0.5"
 authors = [
   { name="Murilo Carlos", email="efgs96@gmail.com" },
 ]
