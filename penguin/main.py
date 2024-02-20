@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+from threading import RLock
 import functools
 import asyncio
 import json
@@ -8,13 +9,15 @@ from .igloo import Parser
 
 
 class Penguin(Router):
-    def __init__(self, host="0.0.0.0", port=3000, logger=True, workers=50) -> None:
+    def __init__(self, host="0.0.0.0", port=3000, logger=True, workers=50, lock_routes=False) -> None:
         self.host = host
         self.port = port
         self.logger = logger
         self.workers = workers
         self.executor = ThreadPoolExecutor(self.workers)
         self.router = Router
+        self.lock_routes = lock_routes
+        self.lock = RLock()
 
     async def execute(self, request_line):
         method, path = request_line[0], request_line[1]
@@ -34,7 +37,11 @@ class Penguin(Router):
                 break
 
         if matched_route:
-            route_function = defined_routes[matched_route]
+            if self.lock_routes:
+                with self.lock:
+                    route_function = defined_routes[matched_route]
+            else:
+                route_function = defined_routes[matched_route]
             params = Parser.get_params(route_function, request_line, matched_route)
             return await asyncio.to_thread(functools.partial(route_function, **params))
         else:
