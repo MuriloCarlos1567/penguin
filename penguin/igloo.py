@@ -12,7 +12,7 @@ class Parser:
         return method, route
 
     @classmethod
-    def path_matches(self, defined_path, actual_path):
+    def path_matches(cls, defined_path, actual_path):
         actual_path = actual_path.rstrip("/")
         defined_path = defined_path.rstrip("/")
         defined_path_parts = defined_path.split("/")

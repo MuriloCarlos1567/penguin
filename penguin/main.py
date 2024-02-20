@@ -1,5 +1,4 @@
 from concurrent.futures import ThreadPoolExecutor
-from threading import RLock
 import functools
 import asyncio
 import json
@@ -9,15 +8,13 @@ from .igloo import Parser
 
 
 class Penguin(Router):
-    def __init__(self, host="0.0.0.0", port=3000, logger=True, workers=50, lock_routes=False) -> None:
+    def __init__(self, host="0.0.0.0", port=3000, logger=True, workers=50) -> None:
         self.host = host
         self.port = port
         self.logger = logger
         self.workers = workers
         self.executor = ThreadPoolExecutor(self.workers)
         self.router = Router
-        self.lock_routes = lock_routes
-        self.lock = RLock()
 
     async def execute(self, request_line):
         method, path = request_line[0], request_line[1]
@@ -25,6 +22,8 @@ class Penguin(Router):
         defined_routes = self.router.ROUTE_MAP
 
         matched_route = None
+
+        loop = asyncio.get_running_loop()
 
         for route_key, route_function in defined_routes.items():
             (
@@ -37,15 +36,17 @@ class Penguin(Router):
                 break
 
         if matched_route:
-            if self.lock_routes:
-                with self.lock:
-                    route_function = defined_routes[matched_route]
-            else:
-                route_function = defined_routes[matched_route]
+            route_function = defined_routes[matched_route]
             params = Parser.get_params(route_function, request_line, matched_route)
-            return await asyncio.to_thread(functools.partial(route_function, **params))
+            try:
+                return await loop.run_in_executor(
+                    self.executor, functools.partial(route_function, **params)
+                )
+            except:
+                self.executor.shutdown(wait=True)
+                return {"message": "ThreadPoolExecutor error"}, HttpStatus.INTERNAL_SERVER_ERROR_500
         else:
-            return self.router.http_error(HttpStatus.FORBIDDEN)
+            return self.router.http_error(HttpStatus.FORBIDDEN_403)
 
     async def handler(self, reader, writer):
         while True:
