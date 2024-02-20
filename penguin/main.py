@@ -3,8 +3,8 @@ import functools
 import asyncio
 import json
 
-from router import Router, HttpStatus
-from igloo import Parser
+from .alaska import Router, HttpStatus
+from .igloo import Parser
 
 
 class Penguin(Router):

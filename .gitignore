@@ -72,7 +72,9 @@ instance/
 docs/_build/
 
 # PyBuilder
+BUILD.md
 .pybuilder/
+.pypirc
 target/
 
 # Jupyter Notebook

@@ -1,0 +1,25 @@
+[project]
+name = "py-penguin"
+version = "0.0.4"
+authors = [
+  { name="Murilo Carlos", email="efgs96@gmail.com" },
+]
+description = "A mini penguin framework"
+readme = "README.md"
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/MuriloCarlos1567/penguin"
+Issues = "https://github.com/MuriloCarlos1567/penguin/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["/"]
