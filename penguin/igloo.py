@@ -42,27 +42,30 @@ class Parser:
         if len(path_parts) == len(declared_path_parts):
             for i, part in enumerate(declared_path_parts):
                 if len(part) and part[0] == "{" and part[-1] == "}":
-                    if path_parts[i] in dead_list:
+                    if declared_path_parts[i] in dead_list:
                         continue
                     param_value = path_parts[i]
                     break
         return param_value
 
     @classmethod
-    def get_params(cls, route_function, request_line, declared_path):
+    def get_params(cls, route_function, request_line, declared_path, json_body):
         func_signature = signature(route_function)
         params = {}
         dead_list = set()
 
-        for param_name, param in func_signature.parameters.items():
-            if param_name == "self":
+        for param_name, _ in func_signature.parameters.items():
+            if param_name in ["self"]:
                 continue
 
-            param_value = cls.get_param_value(request_line, declared_path, dead_list)
-
+            param_value = (
+                json_body
+                if param_name == "body"
+                else cls.get_param_value(request_line, declared_path, dead_list)
+            )
             params[param_name] = param_value
 
-            if param_value is not None:
-                dead_list.add(param_value)
+            if param_name is not None:
+                dead_list.add(param_name)
 
         return params

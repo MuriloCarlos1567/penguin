@@ -4,6 +4,7 @@ import asyncio
 import json
 
 from .alaska import Router, HttpStatus
+from .iceberg import HTTPException
 from .igloo import Parser
 
 
@@ -16,7 +17,10 @@ class Penguin(Router):
         self.executor = ThreadPoolExecutor(self.workers)
         self.router = Router
 
-    async def execute(self, request_line):
+    def include_router(self, router):
+        self.router.ROUTE_MAP.update({**router.ROUTE_MAP})
+
+    async def execute(self, request_line, json_body):
         method, path = request_line[0], request_line[1]
 
         defined_routes = self.router.ROUTE_MAP
@@ -37,16 +41,25 @@ class Penguin(Router):
 
         if matched_route:
             route_function = defined_routes[matched_route]
-            params = Parser.get_params(route_function, request_line, matched_route)
+
+            params = Parser.get_params(
+                route_function, request_line, matched_route, json_body
+            )
+
             try:
                 return await loop.run_in_executor(
                     self.executor, functools.partial(route_function, **params)
                 )
-            except:
+            except HTTPException as e:
                 self.executor.shutdown(wait=True)
-                return {"message": "ThreadPoolExecutor error"}, HttpStatus.INTERNAL_SERVER_ERROR_500
+                return e.message, e.status_code
+            except Exception as e:
+                self.executor.shutdown(wait=True)
+                return {
+                    "message": "ThreadPoolExecutor error"
+                }, HttpStatus.INTERNAL_SERVER_ERROR_500
         else:
-            return self.router.http_error(HttpStatus.FORBIDDEN_403)
+            return self.router.http_error(HttpStatus.NOT_FOUND_404)
 
     async def handler(self, reader, writer):
         while True:
@@ -63,16 +76,23 @@ class Penguin(Router):
 
             request = Parser.request_parser(request_line)
 
-            response_data, status_code = await self.execute(request)
+            json_body = json.loads(request_lines[-1]) if request_lines[-1] else {}
 
-            response_json = json.dumps(response_data).encode("utf-8")
+            response_data, status_code = await self.execute(request, json_body)
 
-            response_headers = f"HTTP/1.1 {status_code}\r\nContent-Type: application/json\r\nContent-Length: {len(response_json)}\r\n\r\n"
+            content_lenght = 0
 
-            writer.write(response_headers.encode("utf-8"))
-            await writer.drain()
+            response_json = b""
 
-            writer.write(response_json)
+            if response_data:
+                response_json = json.dumps(response_data).encode("utf-8")
+                content_lenght = len(response_json)
+
+            response_headers = f"HTTP/1.1 {status_code}\r\nContent-Type: application/json\r\nContent-Length: {content_lenght}\r\n\r\n"
+
+            response = response_headers.encode("utf-8") + response_json
+
+            writer.write(response)
             await writer.drain()
 
         writer.close()
@@ -82,7 +102,14 @@ class Penguin(Router):
 
         addr = server.sockets[0].getsockname()
 
-        print(f"🐧Penguin listening on -> {addr[0]}:{addr[1]}")
+        print(
+            f"""
+        🐧 Summoning the happy penguins ❄️  🧊
+        🐧 Warming up the igloo 🏔️  ⛄
+
+        🐧 Penguin listening on -> {addr[0]}:{addr[1]}
+        """
+        )
 
         async with server:
             await server.serve_forever()
